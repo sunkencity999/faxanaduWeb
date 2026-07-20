@@ -108,10 +108,116 @@ const els = {
 // ---------------------------------------------------------------------------
 
 let browser = null; // jsnes.Browser instance, created at power-on
-let romString = null; // loaded ROM as binary string
+let romBytes = null; // pristine ROM bytes (Uint8Array), never modified
 let romLabel = "";
 let running = false;
 let paused = false;
+
+// ---------------------------------------------------------------------------
+// Enhancement options (see patches.js) — persisted in localStorage
+// ---------------------------------------------------------------------------
+
+const OPTIONS_KEY = "faxanaduOptions";
+
+function loadOptions() {
+  try {
+    return JSON.parse(localStorage.getItem(OPTIONS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveOptions(opts) {
+  try {
+    localStorage.setItem(OPTIONS_KEY, JSON.stringify(opts));
+  } catch (e) {
+    console.warn("Could not persist options:", e);
+  }
+}
+
+let options = loadOptions();
+
+function buildEnhancementsUI() {
+  const box = document.getElementById("enhancements");
+  const note = document.createElement("p");
+  note.className = "note";
+  note.innerHTML =
+    "Optional tweaks ported from " +
+    '<a href="https://github.com/Daivuk/Daxanadu">Daxanadu</a> by David St-Louis (MIT). ' +
+    "All off by default for the authentic experience. ROM changes apply on the next Power On / Reset.";
+
+  for (const patch of ROM_PATCHES) {
+    const row = document.createElement("label");
+    row.className = "opt";
+    row.title = patch.hint;
+    if (patch.kind === "toggle") {
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.dataset.patch = patch.id;
+      cb.checked = options[patch.id] === true;
+      cb.addEventListener("change", () => {
+        options[patch.id] = cb.checked;
+        saveOptions(options);
+        hintRestart();
+      });
+      row.append(cb, ` ${patch.label}`);
+    } else {
+      const sel = document.createElement("select");
+      sel.dataset.patch = patch.id;
+      for (const c of patch.choices) {
+        const o = document.createElement("option");
+        o.value = c.value;
+        o.textContent = c.label;
+        sel.append(o);
+      }
+      sel.value = options[patch.id] || patch.default;
+      sel.addEventListener("change", () => {
+        options[patch.id] = sel.value;
+        saveOptions(options);
+        hintRestart();
+      });
+      row.append(`${patch.label}: `, sel);
+    }
+    box.append(row);
+  }
+
+  // Area-name overlay (no ROM edit, takes effect immediately)
+  const row = document.createElement("label");
+  row.className = "opt";
+  row.title = AREA_NAMES_OPTION.hint;
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = options[AREA_NAMES_OPTION.id] === true;
+  cb.addEventListener("change", () => {
+    options[AREA_NAMES_OPTION.id] = cb.checked;
+    saveOptions(options);
+  });
+  row.append(cb, ` ${AREA_NAMES_OPTION.label}`);
+  box.append(row, note);
+}
+
+function hintRestart() {
+  const el = document.getElementById("enh-restart-hint");
+  if (running) el.classList.remove("hidden");
+}
+
+// Grey out patches whose expected bytes aren't present in this ROM revision.
+function updatePatchCompatibility() {
+  const compat = patchCompatibility(romBytes);
+  document.querySelectorAll("#enhancements [data-patch]").forEach((el) => {
+    const ok = compat[el.dataset.patch] !== false;
+    el.disabled = !ok;
+    el.closest(".opt").classList.toggle("incompatible", !ok);
+    if (!ok) el.closest(".opt").title = "Not available: this ROM revision has different bytes at the patch site.";
+  });
+}
+
+function buildRomString() {
+  const { bytes, applied, skipped } = applyRomPatches(romBytes, options);
+  if (applied.length) console.info("Enhancements applied:", applied.join(", "));
+  if (skipped.length) console.warn("Enhancements skipped (ROM mismatch):", skipped.join(", "));
+  return bufferToBinaryString(bytes.buffer);
+}
 
 function showError(msg) {
   els.loadError.textContent = msg;
@@ -129,8 +235,9 @@ async function acceptRom(buffer, label, { persist } = { persist: true }) {
     showError(`"${label}" is not an iNES ROM (missing NES header).`);
     return false;
   }
-  romString = bufferToBinaryString(buffer);
+  romBytes = new Uint8Array(buffer.slice(0));
   romLabel = label;
+  updatePatchCompatibility();
   if (persist) {
     try {
       await idbPut("rom", "rom", { data: buffer, name: label });
@@ -144,7 +251,7 @@ async function acceptRom(buffer, label, { persist } = { persist: true }) {
 }
 
 function powerOn() {
-  if (!romString) return;
+  if (!romBytes) return;
   if (browser) browser.destroy();
   els.screen.innerHTML = "";
   browser = new jsnes.Browser({
@@ -156,13 +263,15 @@ function powerOn() {
       running = false;
     },
   });
-  browser.loadROM(romString);
+  browser.loadROM(buildRomString());
   browser.fitInParent();
   running = true;
   paused = false;
   showPanel("none");
   els.toolbar.classList.remove("hidden");
   els.pause.innerHTML = "&#10074;&#10074; Pause";
+  document.getElementById("enh-restart-hint").classList.add("hidden");
+  startAreaWatcher();
   window.focus();
 }
 
@@ -182,8 +291,9 @@ function togglePause() {
 
 function reset() {
   if (!running) return;
-  browser.loadROM(romString); // full power cycle
+  browser.loadROM(buildRomString()); // full power cycle, picks up option changes
   if (paused) togglePause();
+  document.getElementById("enh-restart-hint").classList.add("hidden");
 }
 
 async function eject() {
@@ -193,7 +303,8 @@ async function eject() {
   }
   running = false;
   paused = false;
-  romString = null;
+  romBytes = null;
+  stopAreaWatcher();
   els.screen.innerHTML = "";
   els.toolbar.classList.add("hidden");
   try {
@@ -254,6 +365,40 @@ function flashButton(btn, text) {
   const original = btn.textContent;
   btn.textContent = text;
   setTimeout(() => (btn.textContent = original), 1200);
+}
+
+// ---------------------------------------------------------------------------
+// Area-name overlay (ported from Daxanadu's RoomWatcher — reads CPU RAM)
+// ---------------------------------------------------------------------------
+
+let areaTimer = null;
+let lastAreaName = "";
+let areaHideTimeout = null;
+
+function startAreaWatcher() {
+  stopAreaWatcher();
+  lastAreaName = "";
+  areaTimer = setInterval(() => {
+    if (!running || paused || options[AREA_NAMES_OPTION.id] !== true) return;
+    const mem = browser.nes.cpu.mem;
+    const name = areaNameFor(mem[0x0024], mem[0x0063]);
+    if (name && name !== lastAreaName) {
+      lastAreaName = name;
+      const el = document.getElementById("area-name");
+      el.textContent = name;
+      el.classList.add("show");
+      clearTimeout(areaHideTimeout);
+      areaHideTimeout = setTimeout(() => el.classList.remove("show"), 3000);
+    }
+  }, 250);
+}
+
+function stopAreaWatcher() {
+  clearInterval(areaTimer);
+  areaTimer = null;
+  clearTimeout(areaHideTimeout);
+  const el = document.getElementById("area-name");
+  if (el) el.classList.remove("show");
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +468,7 @@ async function tryDevRom() {
 }
 
 async function init() {
+  buildEnhancementsUI();
   await refreshSlotLabels();
   const cached = await idbGet("rom", "rom").catch(() => null);
   if (cached && isINes(cached.data)) {

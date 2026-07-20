@@ -248,6 +248,42 @@ footer {
   padding: 30px 16px 24px;
 }
 
+/* ---- Area-name overlay ---- */
+
+#area-name {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  background: rgba(20, 16, 14, 0.85);
+  border: 2px solid var(--gold-dim);
+  border-radius: 6px;
+  color: var(--gold);
+  letter-spacing: 0.25em;
+  padding: 6px 16px 6px 20px;
+  font-size: clamp(11px, 2vw, 16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+#area-name.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Enhancement options ---- */
+
+.opt {
+  display: block;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.opt input[type="checkbox"] { accent-color: var(--gold); }
+.opt select { padding: 2px 4px; margin-left: 4px; }
+.opt.incompatible { opacity: 0.4; cursor: not-allowed; }
+
 /* Fullscreen: let the wrapper fill the display */
 #screen-wrap:fullscreen {
   border: none;

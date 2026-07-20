@@ -67,6 +67,13 @@ player picks it up automatically when served locally.
 - Three save-state slots stored in IndexedDB (F5 save / F8 load) — plus the
   game's own mantra password system
 - Pause (P), reset, screenshot download, cartridge eject
+- **Optional enhancements** ported from [Daxanadu](https://github.com/Daivuk/Daxanadu)
+  by David St-Louis (MIT): keep gold/XP on death, dialog speed, the Pendant
+  bug fix, full starting health, rank-independent wingboots/walk speed, and
+  an area-name overlay. All **off by default** — the authentic game is the
+  default experience. Every ROM patch verifies the original bytes at the
+  patch site first (validated against USA Rev 1 / PRG1) and is skipped
+  safely on other revisions.
 
 ## Updating the emulator
 
