@@ -101,6 +101,25 @@
       </div>
 
       <div class="card">
+        <h3>HD Graphics</h3>
+        <label class="opt"><input type="checkbox" id="hd-enable"> Enable HD renderer</label>
+        <p class="note">Re-renders every frame at up to 4&times; with tile-by-tile art replacement.
+        Loads packs in Mesen's <code>hires.txt</code> format (static tile rules; conditions,
+        backgrounds and audio are not yet supported). Tiles without replacements fall back to
+        pixel-perfect originals, so partial packs work fine.</p>
+        <button id="hd-load">Load HD pack&hellip;</button>
+        <button id="hd-clear" class="ghost">Remove pack</button>
+        <input type="file" id="hd-files" accept=".txt,.png" multiple hidden>
+        <h4 class="subhead">Make your own pack</h4>
+        <label class="opt"><input type="checkbox" id="hd-record"> Record tiles while playing</label>
+        <button id="hd-export">Export template pack</button>
+        <p class="note">Recording collects every unique tile you see. Export produces a
+        paint-over-ready atlas PNG (pre-smoothed 4&times;) plus its <code>hires.txt</code> —
+        edit the PNG in any art tool, then load it back with the button above.</p>
+        <p id="hd-status" class="note"></p>
+      </div>
+
+      <div class="card">
         <h3>About this project</h3>
         <p>
           Faxanadu (Hudson Soft / Falcom, 1987) is still under copyright, so this
@@ -120,6 +139,9 @@
 
   <script src="vendor/jsnes.min.js"></script>
   <script src="js/patches.js"></script>
+  <script src="js/hd-pack.js"></script>
+  <script src="js/hd-renderer.js"></script>
+  <script src="js/hd-builder.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

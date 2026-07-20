@@ -74,6 +74,33 @@ player picks it up automatically when served locally.
   default experience. Every ROM patch verifies the original bytes at the
   patch site first (validated against USA Rev 1 / PRG1) and is skipped
   safely on other revisions.
+- **HD graphics** — a from-scratch HD tile-replacement renderer
+  (`js/hd-renderer.js`). It instruments jsnes's PPU per scanline (so
+  mid-frame scroll splits like the status bar render correctly) and
+  re-composites every frame at up to 4× on a separate canvas: tiles with
+  replacements draw from the pack's PNG atlases, everything else falls back
+  to pixel-perfect native rendering, so partial packs work. Compose cost is
+  ~0.5 ms/frame. Loads packs in Mesen's
+  [`hires.txt` format](https://www.mesen.ca/docs/hdpacks.html) (static
+  CHR-RAM tile rules + palettes; conditions/backgrounds/audio not yet
+  supported), and the pack persists in IndexedDB like the ROM.
+
+## Making an HD pack
+
+The player doubles as pack-authoring tooling — no external programs needed:
+
+1. Enable **HD renderer** and **Record tiles while playing**, then play
+   through the areas you want to cover (466 unique tiles show up in the
+   first minute alone).
+2. **Export template pack** — downloads `faxanadu-hd.png` (every recorded
+   tile at 4×, pre-smoothed with Scale2x so the template is already nicer
+   than raw pixels) and a matching `hires.txt`.
+3. Paint over the PNG in any editor (keep tiles in their 32×32 cells,
+   alpha = transparency), then **Load HD pack…** with both files.
+4. Repeat: record more areas, export again, merge your art in.
+
+Because the format is standard Mesen `hires.txt`, packs authored here also
+work in desktop Mesen, and Mesen packs (their static-tile subset) load here.
 
 ## Updating the emulator
 

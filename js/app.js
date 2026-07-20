@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = "faxanaduWeb";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -21,6 +21,7 @@ function openDB() {
       const db = req.result;
       if (!db.objectStoreNames.contains("rom")) db.createObjectStore("rom");
       if (!db.objectStoreNames.contains("states")) db.createObjectStore("states");
+      if (!db.objectStoreNames.contains("hdpack")) db.createObjectStore("hdpack");
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -272,6 +273,9 @@ function powerOn() {
   els.pause.innerHTML = "&#10074;&#10074; Pause";
   document.getElementById("enh-restart-hint").classList.add("hidden");
   startAreaWatcher();
+  HD.attach(browser, els.screen);
+  HD.setEnabled(options.hd_enabled === true);
+  requestAnimationFrame(() => HD.syncSize());
   window.focus();
 }
 
@@ -305,6 +309,8 @@ async function eject() {
   paused = false;
   romBytes = null;
   stopAreaWatcher();
+  HD_BUILDER.stop();
+  HD.detach();
   els.screen.innerHTML = "";
   els.toolbar.classList.add("hidden");
   try {
@@ -424,6 +430,97 @@ function toggleFullscreen() {
 
 function refit() {
   if (browser) browser.fitInParent();
+  HD.syncSize();
+}
+
+// ---------------------------------------------------------------------------
+// HD pack UI
+// ---------------------------------------------------------------------------
+
+function hdStatus(msg) {
+  document.getElementById("hd-status").textContent = msg;
+}
+
+async function loadHdPackFiles(fileList) {
+  try {
+    const files = Array.from(fileList);
+    const pack = await buildHdPackFromFiles(files);
+    HD.setPack(pack);
+    // persist raw files for next session
+    const stored = await Promise.all(
+      files.map(async (f) => ({ name: f.name, data: await f.arrayBuffer() }))
+    );
+    await idbPutHdPack({ files: stored, savedAt: Date.now() });
+    hdStatus(`Pack loaded: ${pack.ruleCount} tile rules at ${pack.scale}x.`);
+    document.getElementById("hd-enable").checked = true;
+    options.hd_enabled = true;
+    saveOptions(options);
+    HD.setEnabled(true);
+    HD.syncSize();
+  } catch (e) {
+    console.error(e);
+    hdStatus(`Could not load pack: ${e.message}`);
+  }
+}
+
+async function restoreHdPack() {
+  const entry = await idbGetHdPack();
+  if (!entry) return;
+  try {
+    const pack = await buildHdPackFromFiles(entry.files);
+    HD.setPack(pack);
+    hdStatus(`Pack restored: ${pack.ruleCount} tile rules at ${pack.scale}x.`);
+  } catch (e) {
+    console.warn("Stored HD pack failed to load:", e);
+  }
+}
+
+function wireHdUI() {
+  const enable = document.getElementById("hd-enable");
+  enable.checked = options.hd_enabled === true;
+  enable.addEventListener("change", () => {
+    options.hd_enabled = enable.checked;
+    saveOptions(options);
+    HD.setEnabled(enable.checked);
+    HD.syncSize();
+  });
+
+  const input = document.getElementById("hd-files");
+  document.getElementById("hd-load").addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    if (input.files.length) loadHdPackFiles(input.files);
+  });
+
+  document.getElementById("hd-clear").addEventListener("click", async () => {
+    HD.setPack(null);
+    await idbDeleteHdPack();
+    hdStatus("Pack removed. HD mode now renders native tiles only.");
+  });
+
+  const rec = document.getElementById("hd-record");
+  rec.addEventListener("change", () => {
+    if (rec.checked) {
+      if (!HD.active) {
+        rec.checked = false;
+        hdStatus("Enable HD graphics and start the game before recording.");
+        return;
+      }
+      HD_BUILDER.start();
+      hdStatus("Recording tiles… play through areas you want in the template.");
+    } else {
+      HD_BUILDER.stop();
+      hdStatus(`Recording paused. ${HD_BUILDER.count} unique tiles collected.`);
+    }
+  });
+
+  document.getElementById("hd-export").addEventListener("click", async () => {
+    if (HD_BUILDER.count === 0) {
+      hdStatus("Nothing recorded yet. Turn on recording and play first.");
+      return;
+    }
+    const n = await HD_BUILDER.export();
+    hdStatus(`Exported template pack with ${n} tiles (faxanadu-hd.png + hires.txt).`);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +566,8 @@ async function tryDevRom() {
 
 async function init() {
   buildEnhancementsUI();
+  wireHdUI();
+  await restoreHdPack();
   await refreshSlotLabels();
   const cached = await idbGet("rom", "rom").catch(() => null);
   if (cached && isINes(cached.data)) {
