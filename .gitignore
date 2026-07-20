@@ -1,0 +1,6 @@
+# Never commit or publish game data — the ROM is copyrighted (Hudson Soft/Konami)
+*.nes
+rom/
+
+node_modules/
+.DS_Store

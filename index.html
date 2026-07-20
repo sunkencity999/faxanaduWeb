@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Faxanadu — Web Player</title>
+  <meta name="description" content="Play Faxanadu (NES) in your browser. A preservation player — bring your own ROM, everything runs and stays on your device.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2314100e'/%3E%3Ctext x='8' y='13' font-family='monospace' font-size='13' font-weight='bold' fill='%23e8b84b' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header>
+    <h1>FAXANADU</h1>
+    <p class="tagline">Web preservation player &mdash; runs entirely in your browser, nothing leaves your device</p>
+  </header>
+
+  <main>
+    <section id="stage">
+      <div id="screen-wrap">
+        <div id="screen"></div>
+
+        <div id="overlay">
+          <!-- ROM loader -->
+          <div id="loader" class="panel">
+            <h2>Insert Cartridge</h2>
+            <p>Drag a <code>.nes</code> ROM anywhere onto the screen, or</p>
+            <button id="pick-rom" class="big">Choose ROM file&hellip;</button>
+            <input type="file" id="rom-input" accept=".nes,application/octet-stream" hidden>
+            <p class="note">
+              This player ships with <strong>no game data</strong>. Provide a ROM dumped from a
+              cartridge you own. It is stored only in this browser (IndexedDB) and never uploaded.
+            </p>
+            <p id="load-error" class="error hidden"></p>
+          </div>
+
+          <!-- Power on -->
+          <div id="poweron" class="panel hidden">
+            <h2>Cartridge Loaded</h2>
+            <p id="rom-name" class="rom-name"></p>
+            <button id="power" class="big">&#9654; POWER ON</button>
+            <button id="eject-pre" class="ghost">Eject cartridge</button>
+          </div>
+
+          <div id="paused-badge" class="hidden">&#10074;&#10074; PAUSED</div>
+        </div>
+      </div>
+
+      <div id="toolbar" class="hidden">
+        <button id="pause" title="Pause / resume (P)">&#10074;&#10074; Pause</button>
+        <button id="reset" title="Power-cycle the console">&#8635; Reset</button>
+        <span class="sep"></span>
+        <label for="slot">State</label>
+        <select id="slot">
+          <option value="1">Slot 1 — empty</option>
+          <option value="2">Slot 2 — empty</option>
+          <option value="3">Slot 3 — empty</option>
+        </select>
+        <button id="save-state" title="Save state to selected slot (F5)">Save</button>
+        <button id="load-state" title="Load state from selected slot (F8)">Load</button>
+        <span class="sep"></span>
+        <button id="screenshot" title="Download a screenshot">&#128247;</button>
+        <button id="fullscreen" title="Fullscreen (F)">&#x26F6;</button>
+        <button id="eject" class="ghost" title="Stop and remove ROM from this browser">Eject</button>
+      </div>
+    </section>
+
+    <section class="info-grid">
+      <div class="card">
+        <h3>Controls</h3>
+        <table>
+          <tr><td class="key">&#8592; &#8593; &#8594; &#8595;</td><td>Move / climb / use doors</td></tr>
+          <tr><td class="key">X</td><td>A — jump</td></tr>
+          <tr><td class="key">Z</td><td>B — attack / magic</td></tr>
+          <tr><td class="key">Enter</td><td>Start — pause / item menu</td></tr>
+          <tr><td class="key">Right Ctrl</td><td>Select — switch item screens</td></tr>
+          <tr><td class="key">P</td><td>Pause emulator</td></tr>
+          <tr><td class="key">F5 / F8</td><td>Save / load state (selected slot)</td></tr>
+          <tr><td class="key">F</td><td>Fullscreen</td></tr>
+        </table>
+        <p class="note">USB / Bluetooth gamepads work automatically (standard mapping) &mdash; press any button on the pad after the game starts.</p>
+      </div>
+
+      <div class="card">
+        <h3>Saving your game</h3>
+        <p>
+          Faxanadu has no battery save. Progress is kept two ways:
+        </p>
+        <ul>
+          <li><strong>Mantras</strong> — the in-game password system. Visit a Guru and write down the mantra he gives you; enter it at the title screen to continue. This is the authentic 1989 experience.</li>
+          <li><strong>Save states</strong> — instant snapshots stored in this browser. Pick a slot, hit <span class="key">F5</span> to save and <span class="key">F8</span> to restore. States survive closing the tab, but live only in this browser profile.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>About this project</h3>
+        <p>
+          Faxanadu (Hudson Soft / Falcom, 1987) is still under copyright, so this
+          player is distributed <strong>without the game itself</strong>. You supply a ROM dumped
+          from your own cartridge; the emulator
+          (<a href="https://github.com/bfirsh/jsnes">jsnes</a>, MIT license) runs it entirely
+          client-side. No servers, no tracking, no network use at all after the page loads —
+          save the page and it keeps working offline, indefinitely.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built for preservation. Emulation by <a href="https://github.com/bfirsh/jsnes">jsnes</a> (MIT). Faxanadu &copy; Hudson Soft / Nihon Falcom — all rights belong to their owners.</p>
+  </footer>
+
+  <script src="vendor/jsnes.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
