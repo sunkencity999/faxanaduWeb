@@ -290,6 +290,27 @@ footer {
   transform: translateX(-50%) translateY(0);
 }
 
+/* ---- Key binding buttons ---- */
+
+button.keybind {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--gold);
+  min-width: 72px;
+}
+
+button.keybind.capturing {
+  border-color: var(--gold);
+  color: var(--text);
+  animation: capture-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes capture-pulse {
+  50% { background: #3a2d1a; }
+}
+
+.static-keys { margin-top: 10px; }
+
 /* ---- Enhancement options ---- */
 
 .opt {

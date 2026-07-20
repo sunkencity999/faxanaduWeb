@@ -374,6 +374,152 @@ function flashButton(btn, text) {
 }
 
 // ---------------------------------------------------------------------------
+// Keyboard remapping — stored in jsnes's own localStorage format ("keys":
+// { keyCode: [player, button, label] }), so its KeyboardController picks the
+// mapping up automatically on every power-on via loadKeys().
+// ---------------------------------------------------------------------------
+
+const BINDABLE_ACTIONS = [
+  { button: "BUTTON_UP", label: "D-pad Up" },
+  { button: "BUTTON_DOWN", label: "D-pad Down" },
+  { button: "BUTTON_LEFT", label: "D-pad Left" },
+  { button: "BUTTON_RIGHT", label: "D-pad Right" },
+  { button: "BUTTON_A", label: "A — jump" },
+  { button: "BUTTON_B", label: "B — attack / magic" },
+  { button: "BUTTON_START", label: "Start — pause / item menu" },
+  { button: "BUTTON_SELECT", label: "Select — switch item screens" },
+  { button: "BUTTON_TURBO_A", label: "Turbo A" },
+  { button: "BUTTON_TURBO_B", label: "Turbo B" },
+];
+
+// jsnes's built-in defaults (player 2 numpad entries preserved untouched).
+function defaultKeys() {
+  const C = jsnes.Controller;
+  return {
+    88: [1, C.BUTTON_A, "X"],
+    89: [1, C.BUTTON_B, "Y"],
+    90: [1, C.BUTTON_B, "Z"],
+    17: [1, C.BUTTON_SELECT, "Right Ctrl"],
+    13: [1, C.BUTTON_START, "Enter"],
+    38: [1, C.BUTTON_UP, "Up"],
+    40: [1, C.BUTTON_DOWN, "Down"],
+    37: [1, C.BUTTON_LEFT, "Left"],
+    39: [1, C.BUTTON_RIGHT, "Right"],
+    83: [1, C.BUTTON_TURBO_A, "S"],
+    65: [1, C.BUTTON_TURBO_B, "A"],
+    103: [2, C.BUTTON_A, "Num-7"],
+    105: [2, C.BUTTON_B, "Num-9"],
+    99: [2, C.BUTTON_SELECT, "Num-3"],
+    97: [2, C.BUTTON_START, "Num-1"],
+    104: [2, C.BUTTON_UP, "Num-8"],
+    98: [2, C.BUTTON_DOWN, "Num-2"],
+    100: [2, C.BUTTON_LEFT, "Num-4"],
+    102: [2, C.BUTTON_RIGHT, "Num-6"],
+  };
+}
+
+function loadKeyMap() {
+  try {
+    const stored = JSON.parse(localStorage.getItem("keys"));
+    if (stored && Object.keys(stored).length) return stored;
+  } catch { /* fall through */ }
+  return defaultKeys();
+}
+
+function saveKeyMap(keys) {
+  localStorage.setItem("keys", JSON.stringify(keys));
+  if (browser) browser.keyboard.setKeys(keys); // apply live
+}
+
+// Reserved by the app UI; refuse them so shortcuts keep working.
+const RESERVED_KEYCODES = { 80: "P (pause)", 70: "F (fullscreen)", 116: "F5 (save state)", 119: "F8 (load state)" };
+
+let bindingCapture = null; // { button, cell } while waiting for a key press
+
+function keyLabelFromEvent(e) {
+  if (e.key === " ") return "Space";
+  if (e.key.length === 1) return e.key.toUpperCase();
+  if (e.code === "ControlRight") return "Right Ctrl";
+  if (e.code === "ControlLeft") return "Left Ctrl";
+  if (e.code === "ShiftRight") return "Right Shift";
+  if (e.code === "ShiftLeft") return "Left Shift";
+  return e.key;
+}
+
+function renderBindingTable() {
+  const C = jsnes.Controller;
+  const keys = loadKeyMap();
+  const table = document.getElementById("binding-table");
+  table.innerHTML = "";
+  for (const action of BINDABLE_ACTIONS) {
+    const bound = Object.entries(keys)
+      .filter(([, v]) => v[0] === 1 && v[1] === C[action.button])
+      .map(([, v]) => v[2]);
+    const row = document.createElement("tr");
+    const keyCell = document.createElement("td");
+    keyCell.className = "key";
+    const btn = document.createElement("button");
+    btn.className = "keybind";
+    btn.textContent = bound.length ? bound.join(" / ") : "unbound";
+    btn.title = "Click, then press the new key. Esc cancels.";
+    btn.addEventListener("click", () => startBindingCapture(action, btn));
+    keyCell.appendChild(btn);
+    const labelCell = document.createElement("td");
+    labelCell.textContent = action.label;
+    row.append(keyCell, labelCell);
+    table.appendChild(row);
+  }
+}
+
+function startBindingCapture(action, btn) {
+  cancelBindingCapture();
+  bindingCapture = { action, btn, original: btn.textContent };
+  btn.textContent = "press a key…";
+  btn.classList.add("capturing");
+
+  const onKey = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.removeEventListener("keydown", onKey, true);
+    const cap = bindingCapture;
+    bindingCapture = null;
+    btn.classList.remove("capturing");
+    btn.blur();
+    if (!cap || e.key === "Escape") {
+      btn.textContent = cap ? cap.original : btn.textContent;
+      return;
+    }
+    if (RESERVED_KEYCODES[e.keyCode]) {
+      btn.textContent = cap.original;
+      flashButton(btn, "reserved!");
+      return;
+    }
+    const C = jsnes.Controller;
+    const keys = loadKeyMap();
+    // Remove existing player-1 bindings for this action, and any other
+    // binding already using the chosen key.
+    for (const code of Object.keys(keys)) {
+      const [player, button] = keys[code];
+      if ((player === 1 && button === C[cap.action.button]) || Number(code) === e.keyCode) {
+        delete keys[code];
+      }
+    }
+    keys[e.keyCode] = [1, C[cap.action.button], keyLabelFromEvent(e)];
+    saveKeyMap(keys);
+    renderBindingTable();
+  };
+  window.addEventListener("keydown", onKey, true);
+}
+
+function cancelBindingCapture() {
+  if (bindingCapture) {
+    bindingCapture.btn.textContent = bindingCapture.original;
+    bindingCapture.btn.classList.remove("capturing");
+    bindingCapture = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Area-name overlay (ported from Daxanadu's RoomWatcher — reads CPU RAM)
 // ---------------------------------------------------------------------------
 
@@ -567,6 +713,11 @@ async function tryDevRom() {
 async function init() {
   buildEnhancementsUI();
   wireHdUI();
+  renderBindingTable();
+  document.getElementById("reset-keys").addEventListener("click", () => {
+    saveKeyMap(defaultKeys());
+    renderBindingTable();
+  });
   await restoreHdPack();
   await refreshSlotLabels();
   const cached = await idbGet("rom", "rom").catch(() => null);

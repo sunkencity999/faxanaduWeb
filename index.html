@@ -70,17 +70,14 @@
     <section class="info-grid">
       <div class="card">
         <h3>Controls</h3>
-        <table>
-          <tr><td class="key">&#8592; &#8593; &#8594; &#8595;</td><td>Move / climb / use doors</td></tr>
-          <tr><td class="key">X</td><td>A — jump</td></tr>
-          <tr><td class="key">Z</td><td>B — attack / magic</td></tr>
-          <tr><td class="key">Enter</td><td>Start — pause / item menu</td></tr>
-          <tr><td class="key">Right Ctrl</td><td>Select — switch item screens</td></tr>
+        <table id="binding-table"></table>
+        <button id="reset-keys" class="ghost">Reset to defaults</button>
+        <table class="static-keys">
           <tr><td class="key">P</td><td>Pause emulator</td></tr>
           <tr><td class="key">F5 / F8</td><td>Save / load state (selected slot)</td></tr>
           <tr><td class="key">F</td><td>Fullscreen</td></tr>
         </table>
-        <p class="note">USB / Bluetooth gamepads work automatically (standard mapping) &mdash; press any button on the pad after the game starts.</p>
+        <p class="note">Click a key to rebind it (Esc cancels). USB / Bluetooth gamepads work automatically (standard mapping) &mdash; press any button on the pad after the game starts.</p>
       </div>
 
       <div class="card">
