@@ -276,6 +276,8 @@ function powerOn() {
   HD.attach(browser, els.screen);
   HD.setEnabled(options.hd_enabled === true);
   requestAnimationFrame(() => HD.syncSize());
+  syncGamepadPlayer();
+  renderGamepadUI();
   window.focus();
 }
 
@@ -520,6 +522,208 @@ function cancelBindingCapture() {
 }
 
 // ---------------------------------------------------------------------------
+// Gamepad mapping — stored in jsnes's own "gamepadConfig" localStorage format
+// ({ playerGamepadId: [id, null], configs: { id: { buttons: [...] } } }), so
+// its GamepadController drives the game directly. Note: jsnes gamepads do
+// nothing until a config exists, so this UI is what enables pad support.
+// ---------------------------------------------------------------------------
+
+function loadGamepadConfig() {
+  try {
+    return JSON.parse(localStorage.getItem("gamepadConfig")) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveGamepadConfig(cfg) {
+  if (cfg) {
+    localStorage.setItem("gamepadConfig", JSON.stringify(cfg));
+  } else {
+    localStorage.removeItem("gamepadConfig");
+  }
+  if (browser) {
+    browser.gamepad.gamepadConfig = cfg || undefined;
+    syncGamepadPlayer();
+  }
+}
+
+function connectedPad() {
+  if (!navigator.getGamepads) return null;
+  for (const p of navigator.getGamepads()) if (p) return p;
+  return null;
+}
+
+/*
+ * jsnes disables keyboard input for a player whose id appears in
+ * playerGamepadId — even if that pad is unplugged. Keep the runtime value in
+ * sync with what's actually connected so the keyboard always works when no
+ * pad is present. (The persisted config keeps the id.)
+ */
+function syncGamepadPlayer() {
+  if (!browser || !browser.gamepad.gamepadConfig) return;
+  const cfg = browser.gamepad.gamepadConfig;
+  const pad = connectedPad();
+  cfg.playerGamepadId = [pad && cfg.configs[pad.id] ? pad.id : null, null];
+}
+
+// Standard-mapping preset (https://w3c.github.io/gamepad/#remapping):
+// south=A, west=B, east/north=turbo, back=Select, start=Start,
+// d-pad buttons 12-15 plus left stick on axes 0/1.
+function standardGamepadButtons() {
+  const C = jsnes.Controller;
+  return [
+    { type: "button", code: 0, buttonId: C.BUTTON_A },
+    { type: "button", code: 2, buttonId: C.BUTTON_B },
+    { type: "button", code: 1, buttonId: C.BUTTON_TURBO_A },
+    { type: "button", code: 3, buttonId: C.BUTTON_TURBO_B },
+    { type: "button", code: 8, buttonId: C.BUTTON_SELECT },
+    { type: "button", code: 9, buttonId: C.BUTTON_START },
+    { type: "button", code: 12, buttonId: C.BUTTON_UP },
+    { type: "button", code: 13, buttonId: C.BUTTON_DOWN },
+    { type: "button", code: 14, buttonId: C.BUTTON_LEFT },
+    { type: "button", code: 15, buttonId: C.BUTTON_RIGHT },
+    { type: "axis", code: 0, value: -1, buttonId: C.BUTTON_LEFT },
+    { type: "axis", code: 0, value: 1, buttonId: C.BUTTON_RIGHT },
+    { type: "axis", code: 1, value: -1, buttonId: C.BUTTON_UP },
+    { type: "axis", code: 1, value: 1, buttonId: C.BUTTON_DOWN },
+  ];
+}
+
+function describePadBinding(b) {
+  return b.type === "axis" ? `Axis${b.code}${b.value > 0 ? "+" : "−"}` : `B${b.code}`;
+}
+
+let padCapture = null; // { btn, original } while waiting for a pad press
+
+function renderGamepadUI() {
+  const box = document.getElementById("gamepad-ui");
+  box.innerHTML = "";
+  const pad = connectedPad();
+  const note = document.createElement("p");
+  note.className = "note";
+
+  if (!pad) {
+    note.textContent = "No gamepad detected — connect one and press any button on it.";
+    box.append(note);
+    return;
+  }
+
+  const name = document.createElement("p");
+  name.className = "note";
+  name.textContent = `Connected: ${pad.id}`;
+  box.append(name);
+
+  const cfg = loadGamepadConfig();
+  const padCfg = cfg && cfg.configs && cfg.configs[pad.id];
+
+  const table = document.createElement("table");
+  const C = jsnes.Controller;
+  for (const action of BINDABLE_ACTIONS) {
+    const bound = padCfg
+      ? padCfg.buttons.filter((b) => b.buttonId === C[action.button]).map(describePadBinding)
+      : [];
+    const row = document.createElement("tr");
+    const keyCell = document.createElement("td");
+    keyCell.className = "key";
+    const btn = document.createElement("button");
+    btn.className = "keybind";
+    btn.textContent = bound.length ? bound.join(" / ") : "unbound";
+    btn.title = "Click, then press a button or move a stick on the pad. Esc cancels.";
+    btn.addEventListener("click", () => startPadCapture(action, btn));
+    keyCell.appendChild(btn);
+    const labelCell = document.createElement("td");
+    labelCell.textContent = action.label;
+    row.append(keyCell, labelCell);
+    table.appendChild(row);
+  }
+  box.append(table);
+
+  const autoBtn = document.createElement("button");
+  autoBtn.textContent = "Auto-map standard layout";
+  autoBtn.addEventListener("click", () => {
+    saveGamepadConfig({
+      playerGamepadId: [pad.id, null],
+      configs: { ...(cfg ? cfg.configs : {}), [pad.id]: { buttons: standardGamepadButtons() } },
+    });
+    renderGamepadUI();
+  });
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "ghost";
+  clearBtn.textContent = "Clear gamepad config";
+  clearBtn.addEventListener("click", () => {
+    saveGamepadConfig(null);
+    renderGamepadUI();
+  });
+  box.append(autoBtn, clearBtn);
+
+  if (!running) {
+    note.textContent = "Start the game to capture pad presses (auto-map works anytime).";
+    box.append(note);
+  }
+}
+
+function startPadCapture(action, btn) {
+  if (!browser) return;
+  cancelPadCapture();
+  padCapture = { btn, original: btn.textContent };
+  btn.textContent = "press pad…";
+  btn.classList.add("capturing");
+  btn.blur();
+
+  const onEsc = (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelPadCapture();
+    }
+  };
+  padCapture.onEsc = onEsc;
+  window.addEventListener("keydown", onEsc, true);
+
+  browser.gamepad.promptButton((info) => {
+    window.removeEventListener("keydown", onEsc, true);
+    btn.classList.remove("capturing");
+    padCapture = null;
+
+    const C = jsnes.Controller;
+    const cfg = loadGamepadConfig() || { playerGamepadId: [info.gamepadId, null], configs: {} };
+    const padCfg = cfg.configs[info.gamepadId] || { buttons: [] };
+    const entry = { type: info.type, code: info.code, buttonId: C[action.button] };
+    if (info.type === "axis") entry.value = info.value;
+    // drop old bindings for this action, and anything on the same input
+    padCfg.buttons = padCfg.buttons.filter(
+      (b) =>
+        b.buttonId !== entry.buttonId &&
+        !(b.type === entry.type && b.code === entry.code && (b.value || 0) === (entry.value || 0))
+    );
+    padCfg.buttons.push(entry);
+    cfg.configs[info.gamepadId] = padCfg;
+    cfg.playerGamepadId = [info.gamepadId, null];
+    saveGamepadConfig(cfg);
+    renderGamepadUI();
+  });
+}
+
+function cancelPadCapture() {
+  if (!padCapture) return;
+  if (browser) browser.gamepad.promptButton(null);
+  if (padCapture.onEsc) window.removeEventListener("keydown", padCapture.onEsc, true);
+  padCapture.btn.textContent = padCapture.original;
+  padCapture.btn.classList.remove("capturing");
+  padCapture = null;
+}
+
+window.addEventListener("gamepadconnected", () => {
+  syncGamepadPlayer();
+  renderGamepadUI();
+});
+window.addEventListener("gamepaddisconnected", () => {
+  syncGamepadPlayer();
+  renderGamepadUI();
+});
+
+// ---------------------------------------------------------------------------
 // Area-name overlay (ported from Daxanadu's RoomWatcher — reads CPU RAM)
 // ---------------------------------------------------------------------------
 
@@ -714,6 +918,7 @@ async function init() {
   buildEnhancementsUI();
   wireHdUI();
   renderBindingTable();
+  renderGamepadUI();
   document.getElementById("reset-keys").addEventListener("click", () => {
     saveKeyMap(defaultKeys());
     renderBindingTable();

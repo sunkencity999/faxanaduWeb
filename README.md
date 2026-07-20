@@ -62,8 +62,13 @@ player picks it up automatically when served locally.
 
 - Pixel-perfect scaled 256×240 canvas, fullscreen mode
 - Sound via AudioWorklet (jsnes 2.x)
-- Keyboard controls (X = A, Z = B, Enter = Start, Right Ctrl = Select, arrows = D-pad)
-  and automatic USB/Bluetooth gamepad support
+- **Fully remappable controls, in the UI** — click any key in the Controls
+  card to rebind it (conflicts auto-resolve; defaults: X = A, Z = B,
+  Enter = Start, Right Ctrl = Select, arrows = D-pad). Gamepads get the same
+  treatment: one-click standard-layout auto-map, or per-button "press a
+  button on your pad" capture, including analog-stick directions. While a
+  configured pad is connected it takes over player 1; unplug it and the
+  keyboard takes back over automatically.
 - Three save-state slots stored in IndexedDB (F5 save / F8 load) — plus the
   game's own mantra password system
 - Pause (P), reset, screenshot download, cartridge eject
