@@ -32,6 +32,29 @@ python3 -m http.server 8080
 Open http://localhost:8080, then drag your `.nes` file onto the screen
 (one time only — it's remembered by the browser).
 
+## Hosting
+
+There is no build step and no server-side code, so the site runs on
+**any host that can serve files**:
+
+- **GitHub Pages** — live at https://sunkencity999.github.io/faxanaduWeb/
+  (Settings → Pages → deploy from `main`, root).
+- **SiteGround / cPanel-style shared hosting** — upload the repository
+  contents (everything except `node_modules/` and your ROM) to
+  `public_html/` via Site Tools File Manager or FTP. Done.
+- **Netlify / Cloudflare Pages / S3 / nginx** — point it at the folder.
+
+Two requirements, both satisfied by default on modern hosts:
+
+1. **HTTPS** — browsers require a secure context for the AudioWorklet
+   sound pipeline (localhost is exempt). SiteGround issues free
+   Let's Encrypt certificates; turn SSL on.
+2. Correct MIME type for `.js` files (every mainstream host does this).
+
+And one rule: **never upload a `.nes` file to the public site.** The
+player is legal precisely because game data stays on each player's own
+device.
+
 **Local convenience:** put your ROM at `rom/faxanadu.nes` (gitignored) and the
 player picks it up automatically when served locally.
 
