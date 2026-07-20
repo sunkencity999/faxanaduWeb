@@ -90,6 +90,28 @@ player picks it up automatically when served locally.
   CHR-RAM tile rules + palettes; conditions/backgrounds/audio not yet
   supported), and the pack persists in IndexedDB like the ROM.
 
+## Bundled HD pack: "Faxanadu: Revisioned" by Altwolf
+
+The repository includes (`hdpacks/faxanadu-revisioned/`) the wonderful
+**"Faxanadu: Revisioned" v1.26 (2025) — all artwork and pack code by
+Altwolf** (Altwolf360@gmail.com): a complete full-color redraw of every
+tile and sprite in the game. One click in the HD Graphics panel installs it.
+
+Preservation note: this pack nearly vanished. Its original host went down
+weeks after release and its mirror's download link died months later; this
+copy was recovered from the Internet Archive's capture of the author's
+site. It is included here **with credit and gratitude, not for profit**, in
+the same spirit of free distribution the author released it under. Altwolf:
+if you'd like anything changed or removed, open an issue or reach out and
+it will be done immediately. (A slightly newer v1.26.1 is reportedly
+available via the [Mesen Enhancement Packs Discord](https://discord.gg/BwSkrsU9cy).)
+
+Technical notes: the pack targets Faxanadu (USA) PRG0 and uses Mesen 2
+format v109 at 1× scale. ~83% of its rules are static tile replacements,
+which this player renders; condition-based rules (mostly cutscene room
+variants) fall back to original graphics. On a PRG1 ROM most art still
+matches since tiles are keyed by content.
+
 ## Making an HD pack
 
 The player doubles as pack-authoring tooling — no external programs needed:

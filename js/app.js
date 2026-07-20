@@ -825,6 +825,52 @@ async function restoreHdPack() {
   }
 }
 
+/*
+ * Bundled pack: "Faxanadu: Revisioned" v1.26 by Altwolf, included with
+ * credit (see README). Offered as a one-click install when the files are
+ * present on the server.
+ */
+const BUNDLED_PACK_DIR = "hdpacks/faxanadu-revisioned/";
+
+async function offerBundledPack() {
+  let hiresText;
+  try {
+    const res = await fetch(BUNDLED_PACK_DIR + "hires.txt");
+    if (!res.ok) return;
+    hiresText = await res.text();
+    if (!hiresText.includes("<tile>")) return;
+  } catch {
+    return;
+  }
+  const box = document.getElementById("hd-bundled");
+  const btn = document.createElement("button");
+  btn.textContent = "Install bundled pack: Faxanadu Revisioned";
+  const credit = document.createElement("p");
+  credit.className = "note";
+  credit.innerHTML = "&ldquo;Faxanadu: Revisioned&rdquo; v1.26 &mdash; all artwork by <strong>Altwolf</strong>. A complete full-color redraw of every tile and sprite.";
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Installing…";
+    try {
+      const names = [...hiresText.matchAll(/<img>(.+)/g)].map((m) => m[1].trim());
+      const files = [new File([hiresText], "hires.txt", { type: "text/plain" })];
+      for (const name of names) {
+        const res = await fetch(BUNDLED_PACK_DIR + encodeURIComponent(name));
+        if (!res.ok) throw new Error(`missing ${name}`);
+        files.push(new File([await res.blob()], name, { type: "image/png" }));
+      }
+      await loadHdPackFiles(files);
+      btn.textContent = "Installed ✓";
+    } catch (e) {
+      console.error(e);
+      btn.disabled = false;
+      btn.textContent = "Install bundled pack: Faxanadu Revisioned";
+      hdStatus(`Bundled pack install failed: ${e.message}`);
+    }
+  });
+  box.append(btn, credit);
+}
+
 function wireHdUI() {
   const enable = document.getElementById("hd-enable");
   enable.checked = options.hd_enabled === true;
@@ -917,6 +963,7 @@ async function tryDevRom() {
 async function init() {
   buildEnhancementsUI();
   wireHdUI();
+  offerBundledPack();
   renderBindingTable();
   renderGamepadUI();
   document.getElementById("reset-keys").addEventListener("click", () => {
